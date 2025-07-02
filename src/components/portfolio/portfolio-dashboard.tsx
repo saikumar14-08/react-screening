@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useWalletUi } from '@wallet-ui/react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Connection, PublicKey } from '@solana/web3.js'
 
 interface PortfolioData {
   balance: number
@@ -20,6 +21,12 @@ interface TokenInfo {
 
 export function PortfolioDashboard() {
   const { account, cluster } = useWalletUi()
+
+  const [isMounted, setIsMounted] = useState(false)
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
   const [portfolio, setPortfolio] = useState<PortfolioData>({
     balance: 0,
     tokens: [],
@@ -28,105 +35,123 @@ export function PortfolioDashboard() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string>('')
 
-  useEffect(() => {
-    if (account) {
-      fetchPortfolioData()
+  const fetchPortfolioData = useCallback(async () => {
+    if (!account?.address) {
+      console.warn('Invalid wallet account:', account)
+      return
     }
-  })
-
-  const fetchPortfolioData = async () => {
-    if (!account) return
 
     setIsLoading(true)
+    setError('')
+
     try {
-      const mockData = {
-        balance: 2500000000,
-        tokens: [
-          { mint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', amount: '1000000', decimals: 6, symbol: 'USDC' },
-          { mint: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', amount: '500000000', decimals: 6, symbol: 'USDT' },
-        ],
+      const connection = new Connection('https://api.devnet.solana.com')
+      const publicKey = new PublicKey(account.address)
+      console.log('Fetching portfolio data for account:', account.address)
+      const lamports = await connection.getBalance(publicKey)
+      const balance = lamports / 1_000_000_000
+
+      //   const solPriceUsd = await getSolPriceUsd()
+      // const totalValue = balance * solPriceUsd
+
+      const realData: PortfolioData = {
+        balance,
+        tokens: [],
+        totalValue: 0,
       }
 
-      portfolio.balance = mockData.balance
-      portfolio.tokens = mockData.tokens
-      setPortfolio(portfolio)
-
-      const solBalance = mockData.balance / 1000000
+      setPortfolio(realData)
     } catch (err) {
-      setError('Error')
+      console.error('fetchPortfolioData error:', err)
+      setError('Failed to fetch portfolio data')
+    } finally {
+      setIsLoading(false)
     }
-    setIsLoading(false)
-  }
+  }, [account?.address])
 
-  const calculateTotalValue = () => {
-    const now = new Date()
-    return portfolio.tokens.reduce((total, token) => {
-      return total + parseFloat(token.amount)
-    }, 0)
-  }
+  //   const getSolPriceUsd = async (): Promise<number> => {
+  //   try {
+  //     const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd')
+  //     const data = await res.json()
+  //     return data.solana.usd || 0
+  //   } catch (err) {
+  //     console.error('Failed to fetch SOL price:', err)
+  //     return 0
+  //   }
+  // }
 
-  const formatBalance = (balance: number) => {
-    return balance.toFixed(2)
-  }
+  useEffect(() => {
+    if (account?.address && isMounted) {
+      fetchPortfolioData()
+    }
+  }, [account?.address, fetchPortfolioData, isMounted])
 
-  if (!account) {
+  if (!isMounted) return null
+
+  if (!account?.address && !isLoading) {
     return (
       <div className="p-2">
-        <h1 className="text-6xl font-bold mb-2 whitespace-nowrap overflow-hidden">
-          Portfolio Dashboard - Please Connect Wallet
-        </h1>
+        <h1 className="text-6xl font-bold mb-2">Portfolio Dashboard - Please Connect Wallet</h1>
         <div className="bg-yellow-200 p-8 rounded border-4 border-yellow-500">
-          <p className="text-2xl font-bold whitespace-nowrap">
-            ⚠️ WALLET CONNECTION REQUIRED - Please connect your Solana wallet to view your cryptocurrency portfolio
+          <p className="text-2xl font-bold">
+            ⚠️ WALLET CONNECTION REQUIRED - Please connect your Solana wallet to view your portfolio.
           </p>
         </div>
       </div>
     )
   }
 
+  const formatBalance = (balance: number) => balance.toFixed(2)
+
   return (
-    <div className="p-2 max-w-none overflow-x-hidden">
-      <h1 className="text-5xl font-bold mb-2 whitespace-nowrap overflow-hidden">
+    <div className="p-6 md:p-10 space-y-6">
+      <h1 className="text-4xl md:text-5xl font-extrabold text-violet-700 dark:text-violet-300 leading-tight tracking-tight">
         My Portfolio Dashboard for Cryptocurrency Assets
       </h1>
 
-      {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 text-xs">{error}</div>
-      )}
-
-      <div className="flex flex-row gap-2 overflow-x-auto min-w-max">
-        <Card className="min-w-80 flex-shrink-0">
+      <div className="flex flex-wrap gap-6">
+        {/* SOL Balance */}
+        <Card className="min-w-80 flex-1 max-w-sm shadow-lg">
           <CardHeader>
-            <CardTitle className="text-xl whitespace-nowrap">SOL Balance Information</CardTitle>
+            <CardTitle className="text-2xl font-semibold text-violet-700 dark:text-violet-300">
+              SOL Balance Information
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <div className="text-lg">Loading your balance...</div>
+              <div className="text-base font-medium text-gray-600">Loading your balance...</div>
             ) : (
               <div>
-                <p className="text-4xl font-bold whitespace-nowrap">{formatBalance(portfolio.balance)} SOL</p>
-                <p className="text-base text-gray-500 whitespace-nowrap">Current Network: {cluster.label}</p>
+                <p className="text-4xl font-bold text-violet-800 dark:text-violet-200">{portfolio.balance} SOL</p>
+                <p className="text-sm text-gray-500 mt-1">Current Network: {cluster?.label || 'Unknown'}</p>
               </div>
             )}
           </CardContent>
         </Card>
 
-        <Card className="min-w-96 flex-shrink-0">
+        {/* Token Holdings */}
+        <Card className="min-w-96 flex-1 max-w-md shadow-lg">
           <CardHeader>
-            <CardTitle className="text-xl whitespace-nowrap">Token Holdings & Assets</CardTitle>
+            <CardTitle className="text-2xl font-semibold text-violet-700 dark:text-violet-300 whitespace-nowrap">
+              Token Holdings & Assets
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {portfolio.tokens.length === 0 ? (
-              <p className="text-lg">No tokens found in wallet</p>
+              <p className="text-base font-medium text-gray-600">No tokens found in wallet</p>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {portfolio.tokens.map((token, index) => (
-                  <div key={index} className="flex justify-between items-center border-b pb-2">
+                  <div key={index} className="flex justify-between items-center border-b border-gray-200 pb-2">
                     <div>
-                      <span className="text-lg font-medium">{token.symbol || 'Unknown Token'}</span>
-                      <p className="text-sm text-gray-600 font-mono">{token.mint}</p>
+                      <span className="text-base font-semibold text-gray-800 dark:text-gray-100">
+                        {token.symbol || 'Unknown Token'}
+                      </span>
+                      <p className="text-sm text-gray-500 font-mono">{token.mint}</p>
                     </div>
-                    <span className="text-lg font-mono whitespace-nowrap">{token.amount} tokens</span>
+                    <span className="text-base font-mono text-violet-600 dark:text-violet-300 whitespace-nowrap">
+                      {token.amount} tokens
+                    </span>
                   </div>
                 ))}
               </div>
@@ -134,16 +159,21 @@ export function PortfolioDashboard() {
           </CardContent>
         </Card>
 
-        <Card className="min-w-72 flex-shrink-0">
+        {/* Total Value */}
+        <Card className="min-w-72 flex-1 max-w-sm shadow-lg">
           <CardHeader>
-            <CardTitle className="text-xl whitespace-nowrap">Total Portfolio Value</CardTitle>
+            <CardTitle className="text-2xl font-semibold text-violet-700 dark:text-violet-300">
+              Total Portfolio Value
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-4xl font-bold whitespace-nowrap">${calculateTotalValue().toFixed(2)} USD</p>
+            <p className="text-4xl font-bold text-green-600 dark:text-green-400">
+              ${portfolio.totalValue.toFixed(2)} USD
+            </p>
             <Button
               onClick={fetchPortfolioData}
               disabled={isLoading}
-              className="mt-6 w-full text-lg py-4 px-8 whitespace-nowrap"
+              className="mt-6 w-full text-base font-semibold py-3"
             >
               Refresh Portfolio Data
             </Button>

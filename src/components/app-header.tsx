@@ -19,6 +19,7 @@ export function AppHeader({ links = [] }: { links: { label: string; path: string
     <header className="relative z-50 px-4 py-2 bg-neutral-100 dark:bg-neutral-900 dark:text-neutral-400">
       <div className="mx-auto flex justify-between items-center">
         <div className="flex items-baseline gap-4">
+          <img src="/third-time-icon-tiny-white.png" alt="Third Time Logo" className="h-8 w-8 mb-4" />
           <Link className="text-xl hover:text-neutral-500 dark:hover:text-white" href="/">
             <span>Portfolio Dashboard</span>
           </Link>

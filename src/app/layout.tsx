@@ -29,6 +29,8 @@ declare global {
   }
 }
 
-BigInt.prototype.toJSON = function () {
-  return this.toString()
+if (typeof window !== 'undefined') {
+  BigInt.prototype.toJSON = function () {
+    return this.toString()
+  }
 }
